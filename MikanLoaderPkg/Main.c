@@ -150,6 +150,7 @@ EFI_STATUS OpenGOP(EFI_HANDLE image_handle,
   return EFI_SUCCESS;
 }
 
+// ピクセルフォーマットEnum値を文字列に変換する関数
 const CHAR16* GetPixelFormatUnicode(EFI_GRAPHICS_PIXEL_FORMAT fmt) {
   switch (fmt) {
     case PixelRedGreenBlueReserved8BitPerColor:
@@ -196,8 +197,10 @@ EFI_STATUS EFIAPI UefiMain(
   memmap_file->Close(memmap_file);
 
   // #@@range_begin(gop)
+  // OpenGOP()を使ってGOP(Graphics Output Protocol)を取得する
   EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
   OpenGOP(image_handle, &gop);
+  // GOPの情報を画面にデバッグ出力
   Print(L"Resolution: %ux%u, Pixel Format: %s, %u pixels/line\n",
       gop->Mode->Info->HorizontalResolution,
       gop->Mode->Info->VerticalResolution,
@@ -207,7 +210,7 @@ EFI_STATUS EFIAPI UefiMain(
       gop->Mode->FrameBufferBase,
       gop->Mode->FrameBufferBase + gop->Mode->FrameBufferSize,
       gop->Mode->FrameBufferSize);
-
+  // フレームバッファを白で塗りつぶす
   UINT8* frame_buffer = (UINT8*)gop->Mode->FrameBufferBase;
   for (UINTN i = 0; i < gop->Mode->FrameBufferSize; ++i) {
     frame_buffer[i] = 255;
