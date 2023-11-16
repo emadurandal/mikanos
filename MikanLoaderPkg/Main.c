@@ -12,6 +12,8 @@
 #include  "frame_buffer_config.hpp"
 #include  "elf.hpp"
 
+// #@@range_begin(struct_memory_map)
+// 独自のメモリマップ構造体
 struct MemoryMap {
   UINTN buffer_size;
   VOID* buffer;
@@ -21,12 +23,18 @@ struct MemoryMap {
   UINT32 descriptor_version;
 };
 
+// #@@range_begin(get_memory_map)
+// メモリマップを取得する関数
 EFI_STATUS GetMemoryMap(struct MemoryMap* map) {
+  // メモリマップ構造体側にバッファが準備されていない場合は、エラーを返す
   if (map->buffer == NULL) {
     return EFI_BUFFER_TOO_SMALL;
   }
 
+  // GetMemoryMap()を呼び出す前に、map->map_sizeにバッファのサイズを設定しておく
   map->map_size = map->buffer_size;
+
+  // gBSのGetMemoryMap()を呼び出す
   return gBS->GetMemoryMap(
       &map->map_size,
       (EFI_MEMORY_DESCRIPTOR*)map->buffer,
@@ -35,6 +43,8 @@ EFI_STATUS GetMemoryMap(struct MemoryMap* map) {
       &map->descriptor_version);
 }
 
+// #@@range_begin(get_memory_type)
+// メモリタイプEnum値を文字列に変換する関数
 const CHAR16* GetMemoryTypeUnicode(EFI_MEMORY_TYPE type) {
   switch (type) {
     case EfiReservedMemoryType: return L"EfiReservedMemoryType";
@@ -62,6 +72,7 @@ EFI_STATUS SaveMemoryMap(struct MemoryMap* map, EFI_FILE_PROTOCOL* file) {
   CHAR8 buf[256];
   UINTN len;
 
+  // CSVのヘッダー行をファイルに書き込む
   CHAR8* header =
     "Index, Type, Type(name), PhysicalStart, NumberOfPages, Attribute\n";
   len = AsciiStrLen(header);
@@ -70,21 +81,26 @@ EFI_STATUS SaveMemoryMap(struct MemoryMap* map, EFI_FILE_PROTOCOL* file) {
     return status;
   }
 
+  // 画面にデバッグ出力
   Print(L"map->buffer = %08lx, map->map_size = %08lx\n",
       map->buffer, map->map_size);
 
+  // map->bufferはEFI_MEMORY_DESCRIPTORの配列なので、descriptor_sizeバイトごとにiterを増やすループ
   EFI_PHYSICAL_ADDRESS iter;
   int i;
   for (iter = (EFI_PHYSICAL_ADDRESS)map->buffer, i = 0;
        iter < (EFI_PHYSICAL_ADDRESS)map->buffer + map->map_size;
        iter += map->descriptor_size, i++) {
     EFI_MEMORY_DESCRIPTOR* desc = (EFI_MEMORY_DESCRIPTOR*)iter;
+
+    // カンマ区切り（CSV）形式でメモリマップの各情報をバッファbufに書き込む
     len = AsciiSPrint(
         buf, sizeof(buf),
         "%u, %x, %-ls, %08lx, %lx, %lx\n",
         i, desc->Type, GetMemoryTypeUnicode(desc->Type),
         desc->PhysicalStart, desc->NumberOfPages,
         desc->Attribute & 0xffffflu);
+    // バッファbufの内容をファイルに書き込む
     status = file->Write(file, &len, buf);
     if (EFI_ERROR(status)) {
       return status;
@@ -208,6 +224,8 @@ EFI_STATUS EFIAPI UefiMain(
 
   Print(L"Hello, Mikan World!\n");
 
+  // #@@range_begin(main)
+  // メモリマップ取得
   CHAR8 memmap_buf[4096 * 4];
   struct MemoryMap memmap = {sizeof(memmap_buf), memmap_buf, 0, 0, 0, 0};
   status = GetMemoryMap(&memmap);
@@ -216,6 +234,7 @@ EFI_STATUS EFIAPI UefiMain(
     Halt();
   }
 
+  // まずはルートディレクトリを開く
   EFI_FILE_PROTOCOL* root_dir;
   status = OpenRootDir(image_handle, &root_dir);
   if (EFI_ERROR(status)) {
@@ -223,6 +242,7 @@ EFI_STATUS EFIAPI UefiMain(
     Halt();
   }
 
+  // memmapというファイルを作って開く
   EFI_FILE_PROTOCOL* memmap_file;
   status = root_dir->Open(
       root_dir, &memmap_file, L"\\memmap",
@@ -231,11 +251,13 @@ EFI_STATUS EFIAPI UefiMain(
     Print(L"failed to open file '\\memmap': %r\n", status);
     Print(L"Ignored.\n");
   } else {
+    // メモリマップをmemmapファイルに書き込む
     status = SaveMemoryMap(&memmap, memmap_file);
     if (EFI_ERROR(status)) {
       Print(L"failed to save memory map: %r\n", status);
       Halt();
     }
+    // memmapファイルを閉じる
     status = memmap_file->Close(memmap_file);
     if (EFI_ERROR(status)) {
       Print(L"failed to close memory map: %r\n", status);
