@@ -291,6 +291,8 @@ EFI_STATUS EFIAPI UefiMain(
     frame_buffer[i] = 255;
   }
 
+  // #@@range_begin(read_kernel)
+  // kernel.elfを開く
   EFI_FILE_PROTOCOL* kernel_file;
   status = root_dir->Open(
       root_dir, &kernel_file, L"\\kernel.elf",
@@ -300,8 +302,14 @@ EFI_STATUS EFIAPI UefiMain(
     Halt();
   }
 
+  // 開いたkernel.elfファイル全体を読み込むには、そのファイルサイズを知る必要がある。
+  // そのためファイルサイズを取得するためkernel_file->GetInfo()を呼び出す。
+  // その情報の受け皿となるfile_info_bufferを用意する。
+  // sizeof(CHAR16) * 12はファイル名の文字数分のバッファを確保するためのもので、
+  // 詳しくは書籍p75を参照。
   UINTN file_info_size = sizeof(EFI_FILE_INFO) + sizeof(CHAR16) * 12;
   UINT8 file_info_buffer[file_info_size];
+  // kernel_file->GetInfo()を呼び出してファイルサイズを取得する。
   status = kernel_file->GetInfo(
       kernel_file, &gEfiFileInfoGuid,
       &file_info_size, file_info_buffer);
@@ -311,7 +319,9 @@ EFI_STATUS EFIAPI UefiMain(
   }
 
   // #@@range_begin(read_kernel)
+  // file_info_bufferはUINT8型なので、EFI_FILE_INFO*型にキャストする。
   EFI_FILE_INFO* file_info = (EFI_FILE_INFO*)file_info_buffer;
+  // ファイルサイズはfile_info->FileSizeに格納されている。
   UINTN kernel_file_size = file_info->FileSize;
 
   VOID* kernel_buffer;
@@ -320,6 +330,7 @@ EFI_STATUS EFIAPI UefiMain(
     Print(L"failed to allocate pool: %r\n", status);
     Halt();
   }
+  // kernel.elfを一時領域kernel_bufferに読み込む。  
   status = kernel_file->Read(kernel_file, &kernel_file_size, kernel_buffer);
   if (EFI_ERROR(status)) {
     Print(L"error: %r", status);
@@ -352,13 +363,20 @@ EFI_STATUS EFIAPI UefiMain(
   }
   // #@@range_end(copy_segments)
 
+  // OSの邪魔にならないように、今まで動いていたUEFI BIOSのブートサービスを停止する
+  // この後はブートサービスの機能（Print()やファイルやメモリ関連の機能）は使えなくなる
+  // この関数はその時点での最新のメモリマップのマップキーを要求する（第２引数）
+  // gBS->ExitBootServices()は指定されたマップキーが最近のメモリマップに紐づくマップキーでない場合、実行に失敗する
+  // 色々ブートろサービスの機能を使っているので、おそらく一回目は失敗する
   status = gBS->ExitBootServices(image_handle, memmap.map_key);
   if (EFI_ERROR(status)) {
+    // 失敗した場合は、再度メモリマップを所得する
     status = GetMemoryMap(&memmap);
     if (EFI_ERROR(status)) {
       Print(L"failed to get memory map: %r\n", status);
       Halt();
     }
+    // 更新したマップキーで再度ブートサービスの停止を試みる。これは成功するはず。
     status = gBS->ExitBootServices(image_handle, memmap.map_key);
     if (EFI_ERROR(status)) {
       Print(L"Could not exit boot service: %r\n", status);
@@ -367,6 +385,7 @@ EFI_STATUS EFIAPI UefiMain(
   }
 
   // #@@range_begin(get_entry_point)
+  // カーネルのエントリポイントアドレスを取得する
   UINT64 entry_addr = *(UINT64*)(kernel_first_addr + 24);
   // #@@range_end(get_entry_point)
 
@@ -389,8 +408,11 @@ EFI_STATUS EFIAPI UefiMain(
       Halt();
   }
 
+  // エントリポイントのC言語としての関数プロトタイプ情報を定義する
   typedef void EntryPointType(const struct FrameBufferConfig*);
+  // エントリポイントのアドレスを関数ポインタとしてキャスト
   EntryPointType* entry_point = (EntryPointType*)entry_addr;
+  // カーネルのエントリポイントを呼び出す
   entry_point(&config);
 
   Print(L"All done\n");
