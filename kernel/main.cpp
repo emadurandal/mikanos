@@ -22,7 +22,7 @@ int WritePixel(const FrameBufferConfig& config,
                int x, int y, const PixelColor& c) {
   const int pixel_position = config.pixels_per_scan_line * y + x;
   if (config.pixel_format == kPixelRGBResv8BitPerColor) {
-    uint8_t* p = &config.frame_buffer[4 * pixel_position];
+    uint8_t* p = &config.frame_buffer[4 * pixel_position]; // 1ピクセルは4バイト
     p[0] = c.r;
     p[1] = c.g;
     p[2] = c.b;
@@ -40,11 +40,13 @@ int WritePixel(const FrameBufferConfig& config,
 
 // #@@range_begin(call_write_pixel)
 extern "C" void KernelMain(const FrameBufferConfig& frame_buffer_config) {
+  // 白で画面塗りつぶし
   for (int x = 0; x < frame_buffer_config.horizontal_resolution; ++x) {
     for (int y = 0; y < frame_buffer_config.vertical_resolution; ++y) {
       WritePixel(frame_buffer_config, x, y, {255, 255, 255});
     }
   }
+  // 緑で四角を描画
   for (int x = 0; x < 200; ++x) {
     for (int y = 0; y < 100; ++y) {
       WritePixel(frame_buffer_config, 100 + x, 100 + y, {0, 255, 0});
