@@ -381,13 +381,15 @@ EFI_STATUS EFIAPI UefiMain(
   // カーネルのエントリポイントアドレスを取得する
   UINT64 entry_addr = *(UINT64*)(kernel_first_addr + 24);
 
+  // 定義はframe_buffer_config.hppにある
   struct FrameBufferConfig config = {
     (UINT8*)gop->Mode->FrameBufferBase,
     gop->Mode->Info->PixelsPerScanLine,
     gop->Mode->Info->HorizontalResolution,
     gop->Mode->Info->VerticalResolution,
-    0
+    0 // pixel_formatは後で設定する
   };
+  // pixel_formatを設定
   switch (gop->Mode->Info->PixelFormat) {
     case PixelRedGreenBlueReserved8BitPerColor:
       config.pixel_format = kPixelRGBResv8BitPerColor;
