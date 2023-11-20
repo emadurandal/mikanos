@@ -200,19 +200,26 @@ void CalcLoadAddressRange(Elf64_Ehdr* ehdr, UINT64* first, UINT64* last) {
   *last = 0;
   for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i) {
     if (phdr[i].p_type != PT_LOAD) continue;
+    // このループが終わると、*firstには先頭にあるLOADセグメントのp_vaddrの値になる
     *first = MIN(*first, phdr[i].p_vaddr);
+    // このループが終わると、*lastには末尾にあるLOADセグメントのp_vaddr + p_memszの値になる
     *last = MAX(*last, phdr[i].p_vaddr + phdr[i].p_memsz);
   }
 }
 
+// セグメント情報のコピー関数。一時領域から最終目的地へセグメント情報をコピーする。
 void CopyLoadSegments(Elf64_Ehdr* ehdr) {
   Elf64_Phdr* phdr = (Elf64_Phdr*)((UINT64)ehdr + ehdr->e_phoff);
   for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i) {
-    if (phdr[i].p_type != PT_LOAD) continue;
+    if (phdr[i].p_type != PT_LOAD) continue; // p_type == PT_LOADであるセグメントに対し、次の２つの処理を行う
 
+    // segm_in_fileが指す一時領域からp_vaddrが示す最終目的地へデータをコピーする
+    // (すでにphdr[0].p_vaddrの番地にAllocatePagesで新規に最終目的地としてメモリ確保してある)
     UINT64 segm_in_file = (UINT64)ehdr + phdr[i].p_offset;
     CopyMem((VOID*)phdr[i].p_vaddr, (VOID*)segm_in_file, phdr[i].p_filesz);
 
+    // セグメントのメモリ上のサイズがファイル上のサイズより大きい場合（remain_bytes > 0）
+    // 残りを0で埋める
     UINTN remain_bytes = phdr[i].p_memsz - phdr[i].p_filesz;
     SetMem((VOID*)(phdr[i].p_vaddr + phdr[i].p_filesz), remain_bytes, 0);
   }
@@ -323,6 +330,7 @@ EFI_STATUS EFIAPI UefiMain(
   // ファイルサイズはfile_info->FileSizeに格納されている。
   UINTN kernel_file_size = file_info->FileSize;
 
+  // kernel.elfを読み込むための一時領域を確保する。AllocatePoolはページ単位でなくバイト単位で領域を確保する
   VOID* kernel_buffer;
   status = gBS->AllocatePool(EfiLoaderData, kernel_file_size, &kernel_buffer);
   if (EFI_ERROR(status)) {
@@ -338,6 +346,7 @@ EFI_STATUS EFIAPI UefiMain(
 
   Elf64_Ehdr* kernel_ehdr = (Elf64_Ehdr*)kernel_buffer;
   UINT64 kernel_first_addr, kernel_last_addr;
+  // メモリレンジを計算する
   CalcLoadAddressRange(kernel_ehdr, &kernel_first_addr, &kernel_last_addr);
 
   UINTN num_pages = (kernel_last_addr - kernel_first_addr + 0xfff) / 0x1000;
@@ -351,6 +360,8 @@ EFI_STATUS EFIAPI UefiMain(
   CopyLoadSegments(kernel_ehdr);
   Print(L"Kernel: 0x%0lx - 0x%0lx\n", kernel_first_addr, kernel_last_addr);
 
+  // 一時領域のメモリを開放する。
+  // この際、AllocatePagesで別途確保した最終目的地のメモリは開放されない。
   status = gBS->FreePool(kernel_buffer);
   if (EFI_ERROR(status)) {
     Print(L"failed to free pool: %r\n", status);
