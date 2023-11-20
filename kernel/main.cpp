@@ -58,6 +58,7 @@ class BGRResv8BitPerColorPixelWriter : public PixelWriter {
 // #@@range_end(derived_pixel_writer)
 
 // #@@range_begin(placement_new)
+// 配置new演算子(p104参照)
 void* operator new(size_t size, void* buf) {
   return buf;
 }
@@ -66,7 +67,9 @@ void operator delete(void* obj) noexcept {
 }
 // #@@range_end(placement_new)
 
+// クラスのインスタンスを格納するためのバッファ
 char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
+// クラスのインスタンスを指すポインタ
 PixelWriter* pixel_writer;
 
 // #@@range_begin(call_pixel_writer)
