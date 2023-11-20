@@ -89,6 +89,7 @@ void WriteAscii(PixelWriter& writer, int x, int y, char c, const PixelColor& col
 }
 // #@@range_end(write_ascii)
 
+// 配置new演算子(p104参照)
 void* operator new(size_t size, void* buf) {
   return buf;
 }
@@ -96,7 +97,9 @@ void* operator new(size_t size, void* buf) {
 void operator delete(void* obj) noexcept {
 }
 
+// クラスのインスタンスを格納するためのバッファ
 char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
+// クラスのインスタンスを指すポインタ
 PixelWriter* pixel_writer;
 
 extern "C" void KernelMain(const FrameBufferConfig& frame_buffer_config) {
