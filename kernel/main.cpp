@@ -26,7 +26,9 @@ char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
 PixelWriter* pixel_writer;
 
 // #@@range_begin(console_buf)
+// Consoleクラスのインスタンスを配置するためのバッファ
 char console_buf[sizeof(Console)];
+// Consoleクラスのインスタンスへのポインタ
 Console* console;
 // #@@range_end(console_buf)
 
@@ -64,6 +66,7 @@ extern "C" void KernelMain(const FrameBufferConfig& frame_buffer_config) {
   }
 
   // #@@range_begin(new_console)
+  // 配置newでConsoleクラスをインスタンス化する
   console = new(console_buf) Console{*pixel_writer, {0, 0, 0}, {255, 255, 255}};
   // #@@range_end(new_console)
 
