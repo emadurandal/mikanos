@@ -52,7 +52,9 @@ const char mouse_cursor_shape[kMouseCursorHeight][kMouseCursorWidth + 1] = {
 char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
 PixelWriter* pixel_writer;
 
+// Consoleクラスのインスタンスを配置するためのバッファ
 char console_buf[sizeof(Console)];
+// Consoleクラスのインスタンスへのポインタ
 Console* console;
 
 int printk(const char* format, ...) {
