@@ -19,11 +19,11 @@ namespace {
         return x << bits;
     };
 
-    return shl(1, 31)  // enable bit
-        | shl(bus, 16)
-        | shl(device, 11)
-        | shl(function, 8)
-        | (reg_addr & 0xfcu);
+    return shl(1, 31)  // enable bit // 31
+        | shl(bus, 16) // 23:16
+        | shl(device, 11) // 15:11
+        | shl(function, 8) // 10:8
+        | (reg_addr & 0xfcu); // 7:0 // 下位2ビットは0にするため 0xfcu との論理積をとる。最後のuはunsigned intの意味
   }
   // #@@range_end(make_address)
 
@@ -48,16 +48,19 @@ namespace {
    * もし PCI-PCI ブリッジなら，セカンダリバスに対し ScanBus を実行する
    */
   Error ScanFunction(uint8_t bus, uint8_t device, uint8_t function) {
+    // ヘッダータイプを取得
     auto header_type = ReadHeaderType(bus, device, function);
     if (auto err = AddDevice(bus, device, function, header_type)) {
       return err;
     }
 
+    // クラスコードを取得
     auto class_code = ReadClassCode(bus, device, function);
+    // ベースクラス，サブクラスを取得
     uint8_t base = (class_code >> 24) & 0xffu;
     uint8_t sub = (class_code >> 16) & 0xffu;
 
-    if (base == 0x06u && sub == 0x04u) {
+    if (base == 0x06u && sub == 0x04u) { // standard PCI-PCI bridgeかどうかを判定
       // standard PCI-PCI bridge
       auto bus_numbers = ReadBusNumbers(bus, device, function);
       uint8_t secondary_bus = (bus_numbers >> 8) & 0xffu;
@@ -73,17 +76,21 @@ namespace {
    * 有効なファンクションを見つけたら ScanFunction を実行する．
    */
   Error ScanDevice(uint8_t bus, uint8_t device) {
+    // 0番目のファンクションをスキャンする
     if (auto err = ScanFunction(bus, device, 0)) {
       return err;
     }
     if (IsSingleFunctionDevice(ReadHeaderType(bus, device, 0))) {
+      // シングルファンクションデバイスならばここで処理を終了
       return Error::kSuccess;
     }
 
     for (uint8_t function = 1; function < 8; ++function) {
       if (ReadVendorId(bus, device, function) == 0xffffu) {
+        // ベンダーIDが無効であれば、そのファンクションは存在しない
         continue;
       }
+      // マルチファンクションデバイスの場合は残りのファンクションもスキャンする
       if (auto err = ScanFunction(bus, device, function)) {
         return err;
       }
@@ -97,8 +104,10 @@ namespace {
    * 有効なデバイスを見つけたら ScanDevice を実行する．
    */
   Error ScanBus(uint8_t bus) {
+    // 各PCIバスは最大32個のデバイスを持つ
     for (uint8_t device = 0; device < 32; ++device) {
       if (ReadVendorId(bus, device, 0) == 0xffffu) {
+        // ベンダーIDが無効であれば、そのデバイスは存在しない
         continue;
       }
       if (auto err = ScanDevice(bus, device)) {
@@ -159,10 +168,14 @@ namespace pci {
     num_device = 0;
 
     auto header_type = ReadHeaderType(0, 0, 0);
+    // シングルファンクションデバイスであれば
     if (IsSingleFunctionDevice(header_type)) {
+      // 0番目のファンクションのみをスキャンする
       return ScanBus(0);
     }
 
+    // マルチファンクションデバイスであれば残りの1番目以降のファンクションもスキャンする
+    // 1つのPCIデバイスは最大8つのファンクションを持つ
     for (uint8_t function = 1; function < 8; ++function) {
       if (ReadVendorId(0, 0, function) == 0xffffu) {
         continue;
