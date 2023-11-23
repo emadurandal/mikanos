@@ -25,6 +25,8 @@ void SetIDTEntry(InterruptDescriptor& desc,
 
 // #@@range_begin(notify_eoi)
 void NotifyEndOfInterrupt() {
+  // 0xfee000b0番地（Endo of Interruptレジスタ）に0を書き込むことで
+  // CPUに割り込み処理の終了を通知する
   volatile auto end_of_interrupt = reinterpret_cast<uint32_t*>(0xfee000b0);
   *end_of_interrupt = 0;
 }

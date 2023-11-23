@@ -81,7 +81,7 @@ void SwitchEhci2Xhci(const pci::Device& xhc_dev) {
 // #@@range_begin(xhci_handler)
 usb::xhci::Controller* xhc;
 
-__attribute__((interrupt))
+__attribute__((interrupt)) // 純粋なC++の関数ではなく割り込みハンドラであることを指示する
 void IntHandlerXHCI(InterruptFrame* frame) {
   while (xhc->PrimaryEventRing()->HasFront()) {
     if (auto err = ProcessEvent(*xhc)) {
@@ -172,8 +172,10 @@ extern "C" void KernelMain(const FrameBufferConfig& frame_buffer_config) {
   // #@@range_end(load_idt)
 
   // #@@range_begin(configure_msi)
+  // 0xfee00020番地のビット31:24を読み取ることで、BSP(Bootstrap Processor)のLocal APIC IDを取得する
   const uint8_t bsp_local_apic_id =
     *reinterpret_cast<const uint32_t*>(0xfee00020) >> 24;
+  // MSI割り込みを有効化する
   pci::ConfigureMSIFixedDestination(
       *xhc_dev, bsp_local_apic_id,
       pci::MSITriggerMode::kLevel, pci::MSIDeliveryMode::kFixed,
