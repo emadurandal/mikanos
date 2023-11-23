@@ -18,11 +18,11 @@ namespace {
         return x << bits;
     };
 
-    return shl(1, 31)  // enable bit
-        | shl(bus, 16)
-        | shl(device, 11)
-        | shl(function, 8)
-        | (reg_addr & 0xfcu);
+    return shl(1, 31)  // enable bit // 31
+        | shl(bus, 16) // 23:16
+        | shl(device, 11) // 15:11
+        | shl(function, 8) // 10:8
+        | (reg_addr & 0xfcu); // 7:0 // 下位2ビットは0にするため 0xfcu との論理積をとる。最後のuはunsigned intの意味
   }
 
   /** @brief devices[num_device] に情報を書き込み num_device をインクリメントする． */
@@ -43,6 +43,7 @@ namespace {
    */
   Error ScanFunction(uint8_t bus, uint8_t device, uint8_t function) {
     auto class_code = ReadClassCode(bus, device, function);
+    // ヘッダータイプを取得
     auto header_type = ReadHeaderType(bus, device, function);
     Device dev{bus, device, function, header_type, class_code};
     if (auto err = AddDevice(dev)) {
@@ -63,6 +64,7 @@ namespace {
    * 有効なファンクションを見つけたら ScanFunction を実行する．
    */
   Error ScanDevice(uint8_t bus, uint8_t device) {
+    // 0番目のファンクションをスキャンする
     if (auto err = ScanFunction(bus, device, 0)) {
       return err;
     }
@@ -72,8 +74,10 @@ namespace {
 
     for (uint8_t function = 1; function < 8; ++function) {
       if (ReadVendorId(bus, device, function) == 0xffffu) {
+        // ベンダーIDが無効であれば、そのファンクションは存在しない
         continue;
       }
+      // マルチファンクションデバイスの場合は残りのファンクションもスキャンする
       if (auto err = ScanFunction(bus, device, function)) {
         return err;
       }
@@ -85,8 +89,10 @@ namespace {
    * 有効なデバイスを見つけたら ScanDevice を実行する．
    */
   Error ScanBus(uint8_t bus) {
+    // 各PCIバスは最大32個のデバイスを持つ
     for (uint8_t device = 0; device < 32; ++device) {
       if (ReadVendorId(bus, device, 0) == 0xffffu) {
+        // ベンダーIDが無効であれば、そのデバイスは存在しない
         continue;
       }
       if (auto err = ScanDevice(bus, device)) {
@@ -148,7 +154,9 @@ namespace pci {
     num_device = 0;
 
     auto header_type = ReadHeaderType(0, 0, 0);
+    // シングルファンクションデバイスであれば
     if (IsSingleFunctionDevice(header_type)) {
+      // 0番目のファンクションのみをスキャンする
       return ScanBus(0);
     }
 
